@@ -25,16 +25,6 @@
             android:textColor="#982325"
             android:textSize="20sp"
             android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/instock_button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignParentEnd="true"
-            android:background="@drawable/rounded_textfield_confrim_btn"
-            android:fontFamily="sans-serif-black"
-            android:text="+ New Stock"
-            android:textColor="#FFFB83" />
     </RelativeLayout>
 
     <!-- Space between sections -->
