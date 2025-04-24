@@ -15,7 +15,9 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.sisig.data.AppDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,6 +26,7 @@ import kotlinx.coroutines.withContext
 class InventoryActivity : Fragment() {
     private lateinit var db: AppDatabase
     private var lastKnownOrderCount = 0
+    private var totalServings = 0
 
     companion object {
         fun newInstance(): InventoryActivity {
@@ -38,6 +41,9 @@ class InventoryActivity : Fragment() {
         val view = inflater.inflate(R.layout.fragment_inventory, container, false)
 
         db = AppDatabase.getInstance(requireContext())
+        //db.productStockDao.deleteAll()
+        //db.allOrderDao.deleteAll()
+
 
         // Initialize meat stock if it doesn't exist
         viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
@@ -48,7 +54,9 @@ class InventoryActivity : Fragment() {
                     productName = "Meat",
                     quantity = 50
                 )
+
                 db.productStockDao.insert(initialStock)
+
             }
         }
 
@@ -59,31 +67,38 @@ class InventoryActivity : Fragment() {
                 val displayLayout = view?.findViewById<LinearLayout>(R.id.display_added_stock)
                 displayLayout?.removeAllViews() // Clear existing views
                 meatStock?.let {
-                    displayNewStock(it.productName, it.quantity.toString(), "Raw Material")
+                    displayNewStock(it.productName, it.quantity.toString())
                 }
             }
         }
 
         // Monitor orders and update stock
-        viewLifecycleOwner.lifecycleScope.launch {
-            db.allOrderDao.getAllOrders().collect { orders ->
-                val currentOrderCount = orders.size
-                if (currentOrderCount > lastKnownOrderCount) {
-                    decrementMeatStock()
+        lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                db.allOrderDao.getAllOrders().collect { orders ->
+                    val currentOrderCount = orders.size
+                    if (currentOrderCount > lastKnownOrderCount) {
+                        val latestOrder = orders.last()
+                        val totalServings = latestOrder.orderDetail.sumOf {
+                            it.description.split("x")[0].trim().toInt()
+                        }
+                        decrementMeatStock(totalServings)
+                    }
+                    lastKnownOrderCount = currentOrderCount
                 }
-                lastKnownOrderCount = currentOrderCount
             }
         }
 
         return view
     }
 
-    private fun decrementMeatStock() {
-        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+
+    private fun decrementMeatStock(amount: Int) {
+        lifecycleScope.launch(Dispatchers.IO) {
             val meatStock = db.productStockDao.getProductStockByName("Meat")
             meatStock?.let {
-                if (it.quantity > 0) {
-                    db.productStockDao.update(it.copy(quantity = it.quantity - 1))
+                if (it.quantity >= amount) {
+                    db.productStockDao.update(it.copy(quantity = it.quantity - amount))
                 }
             }
         }
@@ -95,7 +110,7 @@ class InventoryActivity : Fragment() {
                 val displayLayout = view?.findViewById<LinearLayout>(R.id.display_added_stock)
                 displayLayout?.removeAllViews()
                 meatStock?.let {
-                    displayNewStock(it.productName, it.quantity.toString(), "Raw Material")
+                    displayNewStock(it.productName, it.quantity.toString())
                 }
             }
         }
@@ -111,7 +126,7 @@ class InventoryActivity : Fragment() {
         dialog.show(parentFragmentManager, "NewStockDialog")
     }
 
-    private fun displayNewStock(productName: String, items: String, category: String) {
+    private fun displayNewStock(productName: String, items: String) {
         val displayLayout: LinearLayout? = view?.findViewById(R.id.display_added_stock)
 
         displayLayout?.let {
@@ -129,7 +144,7 @@ class InventoryActivity : Fragment() {
             // Create and configure TextViews for productName, items, and category
             val productNameTextView = TextView(requireContext()).apply {
                 text = productName
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2f)
             }
 
             val itemsTextView = TextView(requireContext()).apply {
@@ -137,10 +152,7 @@ class InventoryActivity : Fragment() {
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
 
-            val categoryTextView = TextView(requireContext()).apply {
-                text = category
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            }
+
 
             // Create and configure the Edit button (using ImageButton for the icon)
             val editButton = ImageButton(requireContext()).apply {
@@ -149,7 +161,6 @@ class InventoryActivity : Fragment() {
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.5f)
                 setOnClickListener {
                     // Open the edit dialog
-                    showEditDialog(productNameTextView, itemsTextView, categoryTextView)
                 }
             }
 
@@ -168,7 +179,6 @@ class InventoryActivity : Fragment() {
             // Add views to the row layout
             rowLayout.addView(productNameTextView)
             rowLayout.addView(itemsTextView)
-            rowLayout.addView(categoryTextView)
             rowLayout.addView(editButton)
             rowLayout.addView(deleteButton)
 
@@ -370,11 +380,3 @@ class InventoryActivity : Fragment() {
     }
 
 }
-
-
-
-
-
-
-
-

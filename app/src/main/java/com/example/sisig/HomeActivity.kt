@@ -96,28 +96,33 @@ class HomeActivity : Fragment() {
                 val itemCounts = selectedItems.groupingBy { it }.eachCount()
 
                 // Calculate total amount considering quantities
-                var totalAmount = 0.0  // Variable to track total amount (Double)
+                val totalAmount = itemCounts.entries.sumOf { (item, count) ->
+                    item.price.toDouble() * count
+                }
+
+                // Create MenuItem objects with updated prices based on quantity
                 val validatedItems = itemCounts.map { (item, count) ->
-                    val itemTotalPrice = item.price.toDouble() * count  // Price * quantity
-                    totalAmount += itemTotalPrice  // Add to total amount
                     MenuItem(
                         item.name,
                         item.serving,
                         "${count}x ${item.description}",
-                        itemTotalPrice.toInt(),  // Price after quantity multiplication
+                        item.price * count,  // Multiply price by quantity
                         item.imageResId
                     )
                 }
 
-                // Now totalAmount reflects the sum of prices for all selected items
                 val allOrder = AllOrder(
                     orderDetail = validatedItems,
-                    totalAmount = totalAmount  // Convert to Int if required by the database
+                    totalAmount = totalAmount  // This now reflects the quantity-adjusted total
                 )
 
                 db.allOrderDao.insert(allOrder)
 
-
+                withContext(Dispatchers.Main) {
+                    selectedItems.clear()
+                    updateOrderSummary()
+                    Toast.makeText(requireContext(), "Order saved successfully!", Toast.LENGTH_SHORT).show()
+                }
             } catch (e: Exception) {
                 Log.e("OrderSave", "Error details: ${e.message}", e)
                 withContext(Dispatchers.Main) {
@@ -128,12 +133,31 @@ class HomeActivity : Fragment() {
     }
 
     private fun updateOrderSummary() {
-        val itemCounts = selectedItems.groupingBy { it }.eachCount()
-        val totalAmount = itemCounts.entries.sumOf { (item, count) ->
-            item.price.toDouble() * count
+        // Clear existing views in the order summary section
+        val orderSummaryContainer = orderSummarySection.findViewById<LinearLayout>(R.id.order_summary_container)
+        orderSummaryContainer.removeAllViews()
+
+        // Iterate over selected items to create a new summary for each
+        for (menuItem in selectedItems) {
+            val orderItemView = LayoutInflater.from(requireContext()).inflate(R.layout.order_item, orderSummaryContainer, false)
+
+            val orderItemName = orderItemView.findViewById<TextView>(R.id.order_item_name)
+            val orderItemCost = orderItemView.findViewById<TextView>(R.id.total_cost)
+
+            // Set the item name and cost in the summary
+            orderItemName.text = menuItem.name
+            orderItemCost.text = "${menuItem.price} PHP"  // Or you can calculate price based on quantity if needed
+
+            // Add the new order item view to the summary container
+            orderSummaryContainer.addView(orderItemView)
         }
 
+        // Update the total amount at the bottom of the summary
+        val totalAmount = selectedItems.sumOf { it.price.toDouble() }
+        val totalAmountTextView = orderSummarySection.findViewById<TextView>(R.id.total_amount)
+        totalAmountTextView.text = "Total: ${totalAmount} PHP"
     }
+
 
     private fun getSampleMenuItems(): List<MenuItem> {
         return listOf(

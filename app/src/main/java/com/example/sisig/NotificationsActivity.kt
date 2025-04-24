@@ -34,9 +34,10 @@ class NotificationsActivity : Fragment() {
         // Add hardcoded notifications for demonstration
         notifications.addAll(
             listOf(
-                "Congrats for earn 5000 today!",
+                "You earned 5000 today!",
                 "New stock successfully added.",
                 "Meat is out of stock"
+
             )
         )
 

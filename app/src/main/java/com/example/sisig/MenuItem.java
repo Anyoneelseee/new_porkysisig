@@ -14,6 +14,7 @@ public class MenuItem {
         this.description = description;
         this.price = price;
         this.imageResId = imageResId; // Initialize the image resource ID
+
     }
 
     // Getters

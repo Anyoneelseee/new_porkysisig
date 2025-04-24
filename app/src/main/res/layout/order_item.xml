@@ -1,21 +1,29 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:padding="8dp">
+    android:padding="8dp"
+    android:gravity="center_vertical">
 
+    <!-- Menu Item Name -->
     <TextView
         android:id="@+id/order_item_name"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:textColor="@android:color/white"
+        android:text="Menu Name"
+        android:textColor="@color/red"
         android:textSize="16sp" />
 
+    <!-- Item Cost -->
     <TextView
-        android:id="@+id/order_item_quantity"
+        android:id="@+id/total_cost"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="@android:color/white"
+        android:text="0 PHP"
+        android:textColor="@color/red"
         android:textSize="16sp" />
+
 </LinearLayout>
+

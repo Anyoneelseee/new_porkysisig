@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "145570606762",
+    "project_id": "sisig-ea655",
+    "storage_bucket": "sisig-ea655.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:145570606762:android:b12b0a75d6a4b9be262ad3",
+        "android_client_info": {
+          "package_name": "com.example.sisig"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDEikfgZ99hFfA7dFP2n4T9XSd394Bojzk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

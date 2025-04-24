@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FAFAFA"
+    android:background="#ffefde"
     tools:context=".DashboardActivity">
 
     <RelativeLayout
@@ -75,6 +75,7 @@
         android:id="@+id/view_pager"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:background="#ffefde"
         android:layout_below="@+id/viewpager_header"
         android:layout_above="@id/bottom_navigation" />
 
