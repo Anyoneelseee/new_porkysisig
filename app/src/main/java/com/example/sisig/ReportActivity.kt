@@ -27,7 +27,6 @@ class ReportActivity : Fragment() {
     private lateinit var dailySalesTextView: TextView
     private lateinit var monthlySalesTextView: TextView
     private lateinit var yearlySalesTextView: TextView
-
     private lateinit var salesChart: LineChart
 
     companion object {
@@ -46,6 +45,7 @@ class ReportActivity : Fragment() {
         dailySalesTextView = view.findViewById(R.id.daily_sales_amount)
         monthlySalesTextView = view.findViewById(R.id.monthly_sales_amount)
         yearlySalesTextView = view.findViewById(R.id.yearly_sales_amount)
+        salesChart = view.findViewById(R.id.salesChart)
 
         db = AppDatabase.getInstance(requireContext())
 
@@ -54,8 +54,15 @@ class ReportActivity : Fragment() {
             showDatePicker()
         }
 
-        salesChart = view.findViewById(R.id.salesChart)
         setupChart()
+
+        // Generate report for current date by default
+        val calendar = Calendar.getInstance()
+        generateReport(
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH) + 1,
+            calendar.get(Calendar.DAY_OF_MONTH)
+        )
 
         return view
     }
@@ -72,6 +79,11 @@ class ReportActivity : Fragment() {
             xAxis.apply {
                 position = XAxis.XAxisPosition.BOTTOM
                 setDrawGridLines(false)
+                valueFormatter = object : ValueFormatter() {
+                    override fun getFormattedValue(value: Float): String {
+                        return value.toInt().toString()
+                    }
+                }
             }
 
             axisLeft.apply {
@@ -108,18 +120,23 @@ class ReportActivity : Fragment() {
     private fun generateReport(year: Int, month: Int, day: Int) {
         viewLifecycleOwner.lifecycleScope.launch {
             db.allOrderDao.getAllOrders().collect { orders ->
-                // Filter orders by date
+                val selectedDate = Calendar.getInstance().apply {
+                    set(year, month - 1, day)
+                }
+
                 val dailyOrders = orders.filter { order ->
-                    // Add date filtering logic here
-                    true // Currently showing all orders
+                    val orderDate = parseOrderDate(order)
+                    orderDate != null && isSameDay(orderDate, selectedDate)
                 }
+
                 val monthlyOrders = orders.filter { order ->
-                    // Add month filtering logic here
-                    true // Currently showing all orders
+                    val orderDate = parseOrderDate(order)
+                    orderDate != null && isSameMonth(orderDate, selectedDate)
                 }
+
                 val yearlyOrders = orders.filter { order ->
-                    // Add year filtering logic here
-                    true // Currently showing all orders
+                    val orderDate = parseOrderDate(order)
+                    orderDate != null && isSameYear(orderDate, selectedDate)
                 }
 
                 val dailyTotal = dailyOrders.sumOf { it.totalAmount }
@@ -130,15 +147,39 @@ class ReportActivity : Fragment() {
                 monthlySalesTextView.text = String.format("₱%.2f", monthlyTotal)
                 yearlySalesTextView.text = String.format("₱%.2f", yearlyTotal)
 
-                updateChart(orders)
+                updateChart(dailyOrders)
             }
         }
     }
 
+    private fun parseOrderDate(order: AllOrder): Calendar? {
+        return try {
+            val calendar = Calendar.getInstance()
+            calendar.time = order.date
+            calendar
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun isSameDay(date1: Calendar, date2: Calendar): Boolean {
+        return date1.get(Calendar.YEAR) == date2.get(Calendar.YEAR) &&
+                date1.get(Calendar.MONTH) == date2.get(Calendar.MONTH) &&
+                date1.get(Calendar.DAY_OF_MONTH) == date2.get(Calendar.DAY_OF_MONTH)
+    }
+
+    private fun isSameMonth(date1: Calendar, date2: Calendar): Boolean {
+        return date1.get(Calendar.YEAR) == date2.get(Calendar.YEAR) &&
+                date1.get(Calendar.MONTH) == date2.get(Calendar.MONTH)
+    }
+
+    private fun isSameYear(date1: Calendar, date2: Calendar): Boolean {
+        return date1.get(Calendar.YEAR) == date2.get(Calendar.YEAR)
+    }
 
     private fun showDatePicker() {
         val calendar = Calendar.getInstance()
-        DatePickerDialog(
+        val datePicker = DatePickerDialog(
             requireContext(),
             { _, year, month, day ->
                 generateReport(year, month + 1, day)
@@ -146,7 +187,8 @@ class ReportActivity : Fragment() {
             calendar.get(Calendar.YEAR),
             calendar.get(Calendar.MONTH),
             calendar.get(Calendar.DAY_OF_MONTH)
-        ).show()
+        )
+        datePicker.datePicker.maxDate = calendar.timeInMillis // Restrict to today or earlier
+        datePicker.show()
     }
-
 }

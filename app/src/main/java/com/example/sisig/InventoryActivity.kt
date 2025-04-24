@@ -1,6 +1,7 @@
 package com.example.sisig
 
 import android.app.AlertDialog
+import android.content.Context
 import android.os.Bundle
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -25,8 +26,10 @@ import kotlinx.coroutines.withContext
 
 class InventoryActivity : Fragment() {
     private lateinit var db: AppDatabase
-    private var lastKnownOrderCount = 0
-    private val lowStockThreshold = 10 // Define low stock threshold
+    private var lastProcessedOrderId: Long = 0
+    private val lowStockThreshold = 10
+    private val PREFS_NAME = "InventoryPrefs"
+    private val KEY_LAST_PROCESSED_ORDER_ID = "lastProcessedOrderId"
 
     companion object {
         fun newInstance(): InventoryActivity {
@@ -41,6 +44,10 @@ class InventoryActivity : Fragment() {
         val view = inflater.inflate(R.layout.fragment_inventory, container, false)
 
         db = AppDatabase.getInstance(requireContext())
+
+        // Load last processed order ID from SharedPreferences
+        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        lastProcessedOrderId = prefs.getLong(KEY_LAST_PROCESSED_ORDER_ID, 0)
 
         // Initialize meat stock if it doesn't exist
         viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
@@ -70,19 +77,36 @@ class InventoryActivity : Fragment() {
             }
         }
 
+        // Observe orders and display in Ordered Items section
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                db.allOrderDao.getAllOrders().collect { orders ->
+                    // Update Ordered Items section
+                    val displayLayout = view?.findViewById<LinearLayout>(R.id.display_alert_stock)
+                    displayLayout?.removeAllViews()
+                    for (order in orders) {
+                        for (item in order.orderDetail) {
+                            val quantity = item.description.split("x")[0].trim().toIntOrNull() ?: 0
+                            displayOrderItem(item.name, quantity.toString(), item.price.toString())
+                        }
+                    }
+                }
+            }
+        }
+
         // Monitor orders and update stock
         lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 db.allOrderDao.getAllOrders().collect { orders ->
-                    val currentOrderCount = orders.size
-                    if (currentOrderCount > lastKnownOrderCount) {
-                        val latestOrder = orders.last()
-                        val totalServings = latestOrder.orderDetail.sumOf { detail ->
-                            detail.description.split("x")[0].trim().toInt()
+                    val newOrders = orders.filter { it.orderId > lastProcessedOrderId }
+                    for (order in newOrders) {
+                        val totalServings = order.orderDetail.sumOf { detail ->
+                            detail.description.split("x")[0].trim().toIntOrNull() ?: 0
                         }
                         decrementMeatStock(totalServings)
+                        lastProcessedOrderId = order.orderId
+                        prefs.edit().putLong(KEY_LAST_PROCESSED_ORDER_ID, lastProcessedOrderId).apply()
                     }
-                    lastKnownOrderCount = currentOrderCount
                 }
             }
         }
@@ -113,18 +137,15 @@ class InventoryActivity : Fragment() {
         val displayLayout: LinearLayout? = view?.findViewById(R.id.display_added_stock)
 
         displayLayout?.let { layout ->
-            // Parent container to hold both row and separator
             val parentContainer = LinearLayout(requireContext()).apply {
                 orientation = LinearLayout.VERTICAL
             }
 
-            // Create a row layout
             val rowLayout = LinearLayout(requireContext()).apply {
                 orientation = LinearLayout.HORIZONTAL
                 weightSum = 3.5f
             }
 
-            // Create and configure TextViews for productName and items
             val productNameTextView = TextView(requireContext()).apply {
                 text = productName
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2f)
@@ -135,12 +156,10 @@ class InventoryActivity : Fragment() {
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
 
-            // Highlight low stock
-            if (items.toIntOrNull() ?: 0 <= lowStockThreshold) {
+            if ((items.toIntOrNull() ?: 0) <= lowStockThreshold) {
                 rowLayout.setBackgroundColor(ContextCompat.getColor(requireContext(), android.R.color.holo_red_light))
             }
 
-            // Create and configure the Edit button
             val editButton = ImageButton(requireContext()).apply {
                 setImageResource(R.drawable.icon_edit_inventory_vector)
                 background = null
@@ -150,15 +169,12 @@ class InventoryActivity : Fragment() {
                 }
             }
 
-            // Add views to the row layout
             rowLayout.addView(productNameTextView)
             rowLayout.addView(itemsTextView)
             rowLayout.addView(editButton)
 
-            // Add the row layout to the parent container
             parentContainer.addView(rowLayout)
 
-            // Add a separator below the row
             val separator = View(requireContext()).apply {
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -170,27 +186,67 @@ class InventoryActivity : Fragment() {
             }
             parentContainer.addView(separator)
 
-            // Add the parent container to the display layout
+            layout.addView(parentContainer)
+        }
+    }
+
+    private fun displayOrderItem(productName: String, quantity: String, cost: String) {
+        val displayLayout: LinearLayout? = view?.findViewById(R.id.display_alert_stock)
+
+        displayLayout?.let { layout ->
+            val parentContainer = LinearLayout(requireContext()).apply {
+                orientation = LinearLayout.VERTICAL
+            }
+
+            val rowLayout = LinearLayout(requireContext()).apply {
+                orientation = LinearLayout.HORIZONTAL
+                weightSum = 2f
+            }
+
+            val productNameTextView = TextView(requireContext()).apply {
+                text = "$productName x$quantity"
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+
+            val costTextView = TextView(requireContext()).apply {
+                text = "$cost PHP"
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+
+            rowLayout.addView(productNameTextView)
+            rowLayout.addView(costTextView)
+
+            parentContainer.addView(rowLayout)
+
+            val separator = View(requireContext()).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    2
+                ).apply {
+                    setMargins(0, 8, 0, 8)
+                }
+                setBackgroundColor(ContextCompat.getColor(requireContext(), android.R.color.darker_gray))
+            }
+            parentContainer.addView(separator)
+
             layout.addView(parentContainer)
         }
     }
 
     private fun displayAlertStock(productName: String, alertAmount: String, items: String) {
+        // Keep this for low stock alerts if needed, or remove if only showing order items
         val displayLayout: LinearLayout? = view?.findViewById(R.id.display_alert_stock)
 
         displayLayout?.let { layout ->
-            // Parent container to hold both row and separator
             val parentContainer = LinearLayout(requireContext()).apply {
                 orientation = LinearLayout.VERTICAL
             }
 
-            // Create a row layout
             val rowLayout = LinearLayout(requireContext()).apply {
                 orientation = LinearLayout.HORIZONTAL
                 weightSum = 3.5f
             }
 
-            // Create and configure TextViews for productName, alertAmount, and items
             val productNameTextView = TextView(requireContext()).apply {
                 text = productName
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -206,7 +262,6 @@ class InventoryActivity : Fragment() {
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
 
-            // Create and configure the Edit button
             val editButton = ImageButton(requireContext()).apply {
                 setImageResource(R.drawable.icon_edit_inventory_vector)
                 background = null
@@ -216,16 +271,13 @@ class InventoryActivity : Fragment() {
                 }
             }
 
-            // Add views to the row layout
             rowLayout.addView(productNameTextView)
             rowLayout.addView(alertAmountTextView)
             rowLayout.addView(itemsTextView)
             rowLayout.addView(editButton)
 
-            // Add the row layout to the parent container
             parentContainer.addView(rowLayout)
 
-            // Add a separator below the row
             val separator = View(requireContext()).apply {
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -237,7 +289,6 @@ class InventoryActivity : Fragment() {
             }
             parentContainer.addView(separator)
 
-            // Add the parent container to the display layout
             layout.addView(parentContainer)
         }
     }
@@ -248,7 +299,6 @@ class InventoryActivity : Fragment() {
         alertAmountTextView: TextView? = null,
         isAlertStock: Boolean = false
     ) {
-        // Inflate the appropriate dialog layout
         val dialogView = if (isAlertStock) {
             LayoutInflater.from(requireContext()).inflate(R.layout.edit_alert_stock_dialog_layout, null)
         } else {
@@ -263,19 +313,16 @@ class InventoryActivity : Fragment() {
             null
         }
 
-        // Populate the input fields
         productNameInput.setText(productNameTextView.text)
         itemsInput.setText(itemsTextView.text)
         alertAmountInput?.setText(alertAmountTextView?.text)
-        productNameInput.isEnabled = false // Prevent editing product name
+        productNameInput.isEnabled = false
 
-        // Create the dialog
         val dialogBuilder = AlertDialog.Builder(requireContext())
             .setView(dialogView)
             .create()
         dialogBuilder.window?.setBackgroundDrawableResource(android.R.color.transparent)
 
-        // Create button container
         val buttonContainer = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_HORIZONTAL
@@ -287,14 +334,12 @@ class InventoryActivity : Fragment() {
             }
         }
 
-        // Create and style the Save button
         val saveButton = Button(requireContext()).apply {
             text = "Save"
             setBackgroundResource(R.drawable.rounded_textfield_confrim_btn)
             setTextColor(ContextCompat.getColor(requireContext(), R.color.golden_yellow))
             setPadding(24, 0, 24, 0)
             setOnClickListener {
-                // Validate inputs
                 val newItems = itemsInput.text.toString().trim()
                 val newAlertAmount = alertAmountInput?.text?.toString()?.trim()
 
@@ -315,13 +360,11 @@ class InventoryActivity : Fragment() {
                     return@setOnClickListener
                 }
 
-                // Update database
                 lifecycleScope.launch(Dispatchers.IO) {
                     val stock = db.productStockDao.getProductStockByName(productNameTextView.text.toString())
                     stock?.let { productStock ->
                         db.productStockDao.update(productStock.copy(quantity = itemsInt))
                         withContext(Dispatchers.Main) {
-                            // Update UI
                             itemsTextView.text = newItems
                             if (isAlertStock && alertAmountTextView != null) {
                                 alertAmountTextView.text = newAlertAmount
@@ -339,7 +382,6 @@ class InventoryActivity : Fragment() {
             }
         }
 
-        // Create and style the Cancel button
         val cancelButton = Button(requireContext()).apply {
             text = "Cancel"
             setBackgroundResource(R.drawable.rounded_cancel_btn)
@@ -350,14 +392,11 @@ class InventoryActivity : Fragment() {
             }
         }
 
-        // Add buttons to the container
         buttonContainer.addView(saveButton)
         buttonContainer.addView(cancelButton)
 
-        // Add the button container to the dialog layout
         (dialogView as LinearLayout).addView(buttonContainer)
 
-        // Show the dialog
         dialogBuilder.show()
     }
 }

@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Order::class, OrderItem::class, Product::class, Stock::class, AllOrder::class, ProductStock::class],
-    version = 4,
+    version = 5, // Increment version from 4 to 5
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -37,25 +37,18 @@ abstract class AppDatabase : RoomDatabase() {
 
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                // Create temporary table with auto-increment
                 database.execSQL("""
-            CREATE TABLE IF NOT EXISTS all_orders_temp (
-                orderId INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                orderDetail TEXT NOT NULL,
-                totalAmount REAL NOT NULL
-            )
-        """)
-
-                // Copy data from old table to new
+                    CREATE TABLE IF NOT EXISTS all_orders_temp (
+                        orderId INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        orderDetail TEXT NOT NULL,
+                        totalAmount REAL NOT NULL
+                    )
+                """)
                 database.execSQL("""
-            INSERT INTO all_orders_temp (orderDetail, totalAmount)
-            SELECT orderDetail, totalAmount FROM all_orders
-        """)
-
-                // Drop old table
+                    INSERT INTO all_orders_temp (orderDetail, totalAmount)
+                    SELECT orderDetail, totalAmount FROM all_orders
+                """)
                 database.execSQL("DROP TABLE all_orders")
-
-                // Rename temp table to final table
                 database.execSQL("ALTER TABLE all_orders_temp RENAME TO all_orders")
             }
         }
@@ -72,6 +65,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+            ALTER TABLE all_orders ADD COLUMN date TEXT NOT NULL DEFAULT '2023-01-01 00:00:00'
+        """)
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 Room.databaseBuilder(
@@ -79,11 +80,9 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "PorkSisigDatabase"
                 )
-                    .addMigrations(MIGRATION_1_2)
-                    .addMigrations(MIGRATION_2_3)
-                    .addMigrations(MIGRATION_3_4)
-                    .allowMainThreadQueries() // For testing only
-                    .fallbackToDestructiveMigration()
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .allowMainThreadQueries() // For testing only; consider removing in production
+                    .fallbackToDestructiveMigration() // Use with caution
                     .build()
                     .also { INSTANCE = it }
             }

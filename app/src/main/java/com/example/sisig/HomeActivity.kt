@@ -1,5 +1,6 @@
 package com.example.sisig
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -32,13 +33,11 @@ class HomeActivity : Fragment() {
     private lateinit var orderSummarySection: View
     private lateinit var confirmButton: Button
     private lateinit var db: AppDatabase
-    private val selectedItems = mutableListOf<MenuItem>()
+    private val selectedItems = mutableListOf<Pair<MenuItem, Int>>() // Store item and quantity
 
     companion object {
         fun newInstance(): HomeActivity {
-            return HomeActivity().apply {
-                // Optional: Set arguments here if needed
-            }
+            return HomeActivity()
         }
     }
 
@@ -53,23 +52,16 @@ class HomeActivity : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         db = AppDatabase.getInstance(requireContext())
-
-        // Initialize RecyclerView and set its LayoutManager
         recyclerView = view.findViewById(R.id.recycler_view)
         recyclerView.layoutManager = LinearLayoutManager(context)
 
-        // Inflate the order summary section dynamically
         orderSummarySection = LayoutInflater.from(requireContext())
             .inflate(R.layout.order_summary_section, view.findViewById(R.id.parent_layout), false)
-
-        // Initialize confirmButton immediately after inflating orderSummarySection
         confirmButton = orderSummarySection.findViewById(R.id.confirm_order_button)
 
-        // Add the inflated order summary section above the RecyclerView
         val parentLayout = view.findViewById<LinearLayout>(R.id.parent_layout)
         parentLayout.addView(orderSummarySection, 0)
 
-        // Set up confirm button click listener
         confirmButton.setOnClickListener {
             if (selectedItems.isNotEmpty()) {
                 saveOrder()
@@ -79,11 +71,10 @@ class HomeActivity : Fragment() {
         }
 
         val menuItems = getSampleMenuItems()
-        menuAdapter = MenuAdapter(menuItems) { menuItem ->
-            selectedItems.add(menuItem)
-            println("Selected Items: $selectedItems")
+        menuAdapter = MenuAdapter(menuItems) { menuItem, quantity ->
+            selectedItems.add(Pair(menuItem, quantity))
             updateOrderSummary()
-            Toast.makeText(requireContext(), "Added ${menuItem.name} to cart!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "Added ${menuItem.name} x$quantity to cart!", Toast.LENGTH_SHORT).show()
         }
 
         recyclerView.adapter = menuAdapter
@@ -92,28 +83,27 @@ class HomeActivity : Fragment() {
     private fun saveOrder() {
         viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // Group identical items and sum their quantities
-                val itemCounts = selectedItems.groupingBy { it }.eachCount()
+                val itemCounts = selectedItems.groupBy { it.first }
+                    .mapValues { entry -> entry.value.sumOf { it.second } }
 
-                // Calculate total amount considering quantities
-                val totalAmount = itemCounts.entries.sumOf { (item, count) ->
-                    item.price.toDouble() * count
+                val totalAmount = itemCounts.entries.sumOf { (item, quantity) ->
+                    item.price.toDouble() * quantity
                 }
 
-                // Create MenuItem objects with updated prices based on quantity
-                val validatedItems = itemCounts.map { (item, count) ->
+                val validatedItems = itemCounts.map { (item, quantity) ->
                     MenuItem(
                         item.name,
                         item.serving,
-                        "${count}x ${item.description}",
-                        item.price * count,  // Multiply price by quantity
+                        "${quantity}x ${item.description}",
+                        item.price * quantity,
                         item.imageResId
                     )
                 }
 
                 val allOrder = AllOrder(
                     orderDetail = validatedItems,
-                    totalAmount = totalAmount  // This now reflects the quantity-adjusted total
+                    totalAmount = totalAmount,
+                    date = Date() // Set the current date
                 )
 
                 db.allOrderDao.insert(allOrder)
@@ -132,32 +122,36 @@ class HomeActivity : Fragment() {
         }
     }
 
+    @SuppressLint("MissingInflatedId")
     private fun updateOrderSummary() {
-        // Clear existing views in the order summary section
         val orderSummaryContainer = orderSummarySection.findViewById<LinearLayout>(R.id.order_summary_container)
         orderSummaryContainer.removeAllViews()
 
-        // Iterate over selected items to create a new summary for each
-        for (menuItem in selectedItems) {
-            val orderItemView = LayoutInflater.from(requireContext()).inflate(R.layout.order_item, orderSummaryContainer, false)
+        // Group items to show total quantity per item
+        val itemCounts = selectedItems.groupBy { it.first }
+            .mapValues { entry -> entry.value.sumOf { it.second } }
+
+        for ((menuItem, quantity) in itemCounts) {
+            val orderItemView = LayoutInflater.from(requireContext())
+                .inflate(R.layout.order_item, orderSummaryContainer, false)
 
             val orderItemName = orderItemView.findViewById<TextView>(R.id.order_item_name)
+            val orderItemQuantity = orderItemView.findViewById<TextView>(R.id.order_item_quantity)
             val orderItemCost = orderItemView.findViewById<TextView>(R.id.total_cost)
 
-            // Set the item name and cost in the summary
             orderItemName.text = menuItem.name
-            orderItemCost.text = "${menuItem.price} PHP"  // Or you can calculate price based on quantity if needed
+            orderItemQuantity.text = "x$quantity"
+            orderItemCost.text = "${menuItem.price * quantity} PHP"
 
-            // Add the new order item view to the summary container
             orderSummaryContainer.addView(orderItemView)
         }
 
-        // Update the total amount at the bottom of the summary
-        val totalAmount = selectedItems.sumOf { it.price.toDouble() }
+        val totalAmount = itemCounts.entries.sumOf { (item, quantity) ->
+            item.price.toDouble() * quantity
+        }
         val totalAmountTextView = orderSummarySection.findViewById<TextView>(R.id.total_amount)
-        totalAmountTextView.text = "Total: ${totalAmount} PHP"
+        totalAmountTextView.text = "Total: $totalAmount PHP"
     }
-
 
     private fun getSampleMenuItems(): List<MenuItem> {
         return listOf(
