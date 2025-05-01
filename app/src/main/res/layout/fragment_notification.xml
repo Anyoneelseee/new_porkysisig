@@ -8,7 +8,6 @@
     android:padding="16dp"
     android:gravity="center">
 
-    <!-- No Notifications Layout (your no_notif layout) -->
     <LinearLayout
         android:id="@+id/no_notification_layout"
         android:layout_width="match_parent"
@@ -17,7 +16,6 @@
         android:gravity="center"
         android:visibility="gone">
 
-        <!-- Optional Icon -->
         <ImageView
             android:id="@+id/no_notification_icon"
             android:layout_width="80dp"
@@ -26,7 +24,6 @@
             android:contentDescription="@string/no_notification_icon_desc"
             app:tint="@color/gray" />
 
-        <!-- No Notifications Text -->
         <TextView
             android:id="@+id/no_notification_text"
             android:layout_width="wrap_content"
@@ -37,7 +34,6 @@
             android:textStyle="bold"
             android:layout_marginTop="16dp" />
 
-        <!-- Optional Subtext -->
         <TextView
             android:id="@+id/no_notification_subtext"
             android:layout_width="wrap_content"
@@ -48,7 +44,6 @@
             android:layout_marginTop="8dp" />
     </LinearLayout>
 
-    <!-- Notifications List (RecyclerView) -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/notifications_list"
         android:layout_width="match_parent"

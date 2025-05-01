@@ -1,25 +1,29 @@
 package com.example.sisig
 
 import android.app.DatePickerDialog
+import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
-import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.example.sisig.data.AllOrder
 import com.example.sisig.data.AppDatabase
+import com.example.sisig.data.Notification
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.components.XAxis
 import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
 import com.github.mikephil.charting.formatter.ValueFormatter
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.*
 
 class ReportActivity : Fragment() {
@@ -28,6 +32,9 @@ class ReportActivity : Fragment() {
     private lateinit var monthlySalesTextView: TextView
     private lateinit var yearlySalesTextView: TextView
     private lateinit var salesChart: LineChart
+    private var lastMilestone: Int = 0
+    private val PREFS_NAME = "ReportPrefs"
+    private val KEY_LAST_MILESTONE = "lastMilestone"
 
     companion object {
         fun newInstance(): ReportActivity {
@@ -41,13 +48,16 @@ class ReportActivity : Fragment() {
     ): View? {
         val view = inflater.inflate(R.layout.fragment_report, container, false)
 
-        // Initialize views
         dailySalesTextView = view.findViewById(R.id.daily_sales_amount)
         monthlySalesTextView = view.findViewById(R.id.monthly_sales_amount)
         yearlySalesTextView = view.findViewById(R.id.yearly_sales_amount)
         salesChart = view.findViewById(R.id.salesChart)
 
         db = AppDatabase.getInstance(requireContext())
+
+        // Load lastMilestone from SharedPreferences
+        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        lastMilestone = prefs.getInt(KEY_LAST_MILESTONE, 0)
 
         val generateReportButton = view.findViewById<Button>(R.id.generateReportButton)
         generateReportButton.setOnClickListener {
@@ -56,7 +66,13 @@ class ReportActivity : Fragment() {
 
         setupChart()
 
-        // Generate report for current date by default
+        viewLifecycleOwner.lifecycleScope.launch {
+            db.allOrderDao.getAllOrders().collect { orders ->
+                val total = orders.sumOf { it.totalAmount }
+                checkMilestone(total)
+            }
+        }
+
         val calendar = Calendar.getInstance()
         generateReport(
             calendar.get(Calendar.YEAR),
@@ -117,6 +133,28 @@ class ReportActivity : Fragment() {
         salesChart.invalidate()
     }
 
+    private fun checkMilestone(totalSales: Double) {
+        val milestone = (totalSales / 2000).toInt() * 2000
+        if (milestone > lastMilestone && milestone >= 2000) {
+            lastMilestone = milestone
+            // Save lastMilestone to SharedPreferences
+            val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().putInt(KEY_LAST_MILESTONE, lastMilestone).apply()
+            viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                // Check if notification already exists to avoid duplicates
+                val existingNotifications = db.notificationDao.getAllNotificationsSync()
+                if (!existingNotifications.any { it.message == "Milestone achieved: You earned ₱$milestone!" }) {
+                    val notificationId = db.notificationDao.insert(
+                        Notification(message = "Milestone achieved: You earned ₱$milestone!")
+                    )
+                    withContext(Dispatchers.Main) {
+                        Log.d("ReportActivity", "Inserted milestone notification with ID: $notificationId")
+                    }
+                }
+            }
+        }
+    }
+
     private fun generateReport(year: Int, month: Int, day: Int) {
         viewLifecycleOwner.lifecycleScope.launch {
             db.allOrderDao.getAllOrders().collect { orders ->
@@ -142,6 +180,8 @@ class ReportActivity : Fragment() {
                 val dailyTotal = dailyOrders.sumOf { it.totalAmount }
                 val monthlyTotal = monthlyOrders.sumOf { it.totalAmount }
                 val yearlyTotal = yearlyOrders.sumOf { it.totalAmount }
+
+                checkMilestone(yearlyTotal)
 
                 dailySalesTextView.text = String.format("₱%.2f", dailyTotal)
                 monthlySalesTextView.text = String.format("₱%.2f", monthlyTotal)
@@ -188,7 +228,7 @@ class ReportActivity : Fragment() {
             calendar.get(Calendar.MONTH),
             calendar.get(Calendar.DAY_OF_MONTH)
         )
-        datePicker.datePicker.maxDate = calendar.timeInMillis // Restrict to today or earlier
+        datePicker.datePicker.maxDate = calendar.timeInMillis
         datePicker.show()
     }
 }

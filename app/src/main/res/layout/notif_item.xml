@@ -2,14 +2,14 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:padding="16dp"
+    android:padding="30dp"
     android:background="@drawable/border_notification"
-    android:layout_marginBottom="8dp"> <!-- Add margin at the bottom of each notification -->
+    android:layout_marginBottom="8dp">
 
     <TextView
         android:id="@+id/notification_text"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="113dp"
         android:layout_weight="1"
         android:fontFamily="sans-serif-black"
         android:text="Sample notification text"
@@ -26,6 +26,3 @@
         android:textColor="#dbbe18"
         android:textSize="12sp" />
 </LinearLayout>
-
-
-

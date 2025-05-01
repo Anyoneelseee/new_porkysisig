@@ -6,8 +6,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [Order::class, OrderItem::class, Product::class, Stock::class, AllOrder::class, ProductStock::class],
-    version = 5, // Increment version from 4 to 5
+    entities = [Order::class, OrderItem::class, Product::class, Stock::class, AllOrder::class, ProductStock::class, Notification::class],
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -18,6 +18,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val productDao: ProductDao
     abstract val stockDao: StockDao
     abstract val allOrderDao: AllOrderDao
+    abstract val notificationDao: NotificationDao
 
     companion object {
         @Volatile
@@ -68,8 +69,20 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("""
-            ALTER TABLE all_orders ADD COLUMN date TEXT NOT NULL DEFAULT '2023-01-01 00:00:00'
-        """)
+                    ALTER TABLE all_orders ADD COLUMN date TEXT NOT NULL DEFAULT '2023-01-01 00:00:00'
+                """)
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS notifications (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        message TEXT NOT NULL,
+                        timestamp TEXT NOT NULL
+                    )
+                """)
             }
         }
 
@@ -80,9 +93,9 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "PorkSisigDatabase"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
-                    .allowMainThreadQueries() // For testing only; consider removing in production
-                    .fallbackToDestructiveMigration() // Use with caution
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .allowMainThreadQueries()
+                    .fallbackToDestructiveMigration()
                     .build()
                     .also { INSTANCE = it }
             }

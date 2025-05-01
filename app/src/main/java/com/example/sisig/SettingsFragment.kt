@@ -14,12 +14,16 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
+import com.example.sisig.data.AppDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import androidx.appcompat.app.AlertDialog
-
 
 class SettingsFragment : Fragment() {
 
@@ -30,6 +34,7 @@ class SettingsFragment : Fragment() {
     private lateinit var preferredNameInput: EditText
     private lateinit var saveChangesButton: Button
     private lateinit var changeAvatar: TextView
+    private lateinit var db: AppDatabase
 
     private val PICK_IMAGE_REQUEST = 1000
     private val avatarFileName = "avatar_image.jpg"
@@ -42,6 +47,9 @@ class SettingsFragment : Fragment() {
 
         // Initialize SharedPreferences
         sharedPreferences = requireContext().getSharedPreferences("UserPreferences", Context.MODE_PRIVATE)
+
+        // Initialize Database
+        db = AppDatabase.getInstance(requireContext())
 
         // Initialize UI elements
         avatarImage = view.findViewById(R.id.avatarImage)
@@ -138,13 +146,13 @@ class SettingsFragment : Fragment() {
 
             val avatarFile = File(requireContext().filesDir, avatarFileName)
             val outputStream = FileOutputStream(avatarFile)
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream) // Use JPEG and adjust quality
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
             outputStream.close()
 
             avatarImage.setImageBitmap(bitmap)
             Toast.makeText(requireContext(), "Avatar updated", Toast.LENGTH_SHORT).show()
         } catch (e: IOException) {
-            e.printStackTrace()
+            Log.e("SettingsFragment", "Failed to save avatar: ${e.message}", e)
             Toast.makeText(requireContext(), "Failed to save avatar", Toast.LENGTH_SHORT).show()
         }
     }
@@ -152,32 +160,50 @@ class SettingsFragment : Fragment() {
     private fun confirmAndDeleteData() {
         AlertDialog.Builder(requireContext())
             .setTitle("Delete All Data")
-            .setMessage("Are you sure you want to delete all saved user data? This action cannot be undone.")
+            .setMessage("Are you sure you want to delete all saved user data and app data? This action cannot be undone.")
             .setPositiveButton("Yes") { _, _ -> deleteAllData() }
             .setNegativeButton("Cancel", null)
             .show()
     }
 
     private fun deleteAllData() {
-        // Clear SharedPreferences
-        with(sharedPreferences.edit()) {
-            clear()
-            apply()
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                // Clear SharedPreferences
+                requireContext().getSharedPreferences("UserPreferences", Context.MODE_PRIVATE).edit().clear().apply()
+                requireContext().getSharedPreferences("ReportPrefs", Context.MODE_PRIVATE).edit().clear().apply()
+                requireContext().getSharedPreferences("InventoryPrefs", Context.MODE_PRIVATE).edit().clear().apply()
+
+                // Delete avatar file from internal storage
+                val avatarFile = File(requireContext().filesDir, avatarFileName)
+                if (avatarFile.exists()) {
+                    avatarFile.delete()
+                }
+
+                // Clear Room database
+                db.orderDao.deleteAll()
+                db.orderItemDao.deleteAll()
+                db.productDao.deleteAll()
+                db.stockDao.deleteAll()
+                db.allOrderDao.deleteAll()
+                db.productStockDao.deleteAll()
+                db.notificationDao.clearAll()
+
+                withContext(Dispatchers.Main) {
+                    // Clear UI fields
+                    emailInput.text.clear()
+                    usernameInput.text.clear()
+                    preferredNameInput.text.clear()
+                    avatarImage.setImageResource(R.drawable.circle_background)
+                    Toast.makeText(requireContext(), "All data deleted successfully", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Log.e("SettingsFragment", "Error deleting data: ${e.message}", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(requireContext(), "Error deleting data: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
         }
-
-        // Delete avatar file from internal storage
-        val avatarFile = File(requireContext().filesDir, avatarFileName)
-        if (avatarFile.exists()) {
-            avatarFile.delete()
-        }
-
-        // Clear UI fields
-        emailInput.text.clear()
-        usernameInput.text.clear()
-        preferredNameInput.text.clear()
-        avatarImage.setImageResource(R.drawable.circle_background) // Reset to default avatar
-
-        Toast.makeText(requireContext(), "All data deleted successfully.", Toast.LENGTH_SHORT).show()
     }
 
     companion object {

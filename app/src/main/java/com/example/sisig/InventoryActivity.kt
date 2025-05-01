@@ -19,6 +19,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.sisig.data.AppDatabase
+import com.example.sisig.data.Notification
 import com.example.sisig.data.ProductStock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -30,6 +31,7 @@ class InventoryActivity : Fragment() {
     private val lowStockThreshold = 10
     private val PREFS_NAME = "InventoryPrefs"
     private val KEY_LAST_PROCESSED_ORDER_ID = "lastProcessedOrderId"
+    private var lastNotifiedStock: Int? = null
 
     companion object {
         fun newInstance(): InventoryActivity {
@@ -45,11 +47,9 @@ class InventoryActivity : Fragment() {
 
         db = AppDatabase.getInstance(requireContext())
 
-        // Load last processed order ID from SharedPreferences
         val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         lastProcessedOrderId = prefs.getLong(KEY_LAST_PROCESSED_ORDER_ID, 0)
 
-        // Initialize meat stock if it doesn't exist
         viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
             val existingStock = db.productStockDao.getProductStockByName("Meat")
             if (existingStock == null) {
@@ -61,7 +61,6 @@ class InventoryActivity : Fragment() {
             }
         }
 
-        // Observe stock changes
         viewLifecycleOwner.lifecycleScope.launch {
             db.productStockDao.getAllProductStock().collect { stocks ->
                 val meatStock = stocks.find { stock -> stock.productName == "Meat" }
@@ -69,19 +68,20 @@ class InventoryActivity : Fragment() {
                 displayLayout?.removeAllViews()
                 meatStock?.let { stock ->
                     displayNewStock(stock.productName, stock.quantity.toString())
-                    // Display alert stock if quantity is low
-                    if (stock.quantity <= lowStockThreshold) {
-                        displayAlertStock(stock.productName, lowStockThreshold.toString(), stock.quantity.toString())
+                    // Trigger low stock notification if needed
+                    if (stock.quantity <= lowStockThreshold && lastNotifiedStock != stock.quantity) {
+                        db.notificationDao.insert(
+                            Notification(message = "Low stock alert: Meat has ${stock.quantity} units remaining")
+                        )
+                        lastNotifiedStock = stock.quantity
                     }
                 }
             }
         }
 
-        // Observe orders and display in Ordered Items section
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 db.allOrderDao.getAllOrders().collect { orders ->
-                    // Update Ordered Items section
                     val displayLayout = view?.findViewById<LinearLayout>(R.id.display_alert_stock)
                     displayLayout?.removeAllViews()
                     for (order in orders) {
@@ -94,7 +94,6 @@ class InventoryActivity : Fragment() {
             }
         }
 
-        // Monitor orders and update stock
         lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 db.allOrderDao.getAllOrders().collect { orders ->
@@ -211,70 +210,11 @@ class InventoryActivity : Fragment() {
             val costTextView = TextView(requireContext()).apply {
                 text = "$cost PHP"
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                gravity = Gravity.END
             }
 
             rowLayout.addView(productNameTextView)
             rowLayout.addView(costTextView)
-
-            parentContainer.addView(rowLayout)
-
-            val separator = View(requireContext()).apply {
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    2
-                ).apply {
-                    setMargins(0, 8, 0, 8)
-                }
-                setBackgroundColor(ContextCompat.getColor(requireContext(), android.R.color.darker_gray))
-            }
-            parentContainer.addView(separator)
-
-            layout.addView(parentContainer)
-        }
-    }
-
-    private fun displayAlertStock(productName: String, alertAmount: String, items: String) {
-        // Keep this for low stock alerts if needed, or remove if only showing order items
-        val displayLayout: LinearLayout? = view?.findViewById(R.id.display_alert_stock)
-
-        displayLayout?.let { layout ->
-            val parentContainer = LinearLayout(requireContext()).apply {
-                orientation = LinearLayout.VERTICAL
-            }
-
-            val rowLayout = LinearLayout(requireContext()).apply {
-                orientation = LinearLayout.HORIZONTAL
-                weightSum = 3.5f
-            }
-
-            val productNameTextView = TextView(requireContext()).apply {
-                text = productName
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            }
-
-            val alertAmountTextView = TextView(requireContext()).apply {
-                text = alertAmount
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            }
-
-            val itemsTextView = TextView(requireContext()).apply {
-                text = items
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            }
-
-            val editButton = ImageButton(requireContext()).apply {
-                setImageResource(R.drawable.icon_edit_inventory_vector)
-                background = null
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.5f)
-                setOnClickListener {
-                    showEditDialog(productNameTextView, itemsTextView, alertAmountTextView, isAlertStock = true)
-                }
-            }
-
-            rowLayout.addView(productNameTextView)
-            rowLayout.addView(alertAmountTextView)
-            rowLayout.addView(itemsTextView)
-            rowLayout.addView(editButton)
 
             parentContainer.addView(rowLayout)
 

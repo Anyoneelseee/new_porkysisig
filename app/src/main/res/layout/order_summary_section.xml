@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -6,7 +7,6 @@
     android:background="@color/background_main"
     android:padding="12dp">
 
-    <!-- Header for Orders -->
     <TextView
         android:id="@+id/order_summary_header"
         android:layout_width="wrap_content"
@@ -17,39 +17,33 @@
         android:textColor="@color/red"
         android:layout_marginBottom="8dp" />
 
-    <!-- Scrollable container with explicit height -->
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="100dp"
+        android:layout_height="wrap_content"
+        android:fillViewport="true">
 
-    android:fillViewport="true">
+        <LinearLayout
+            android:id="@+id/order_summary_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
 
-    <LinearLayout
-        android:id="@+id/order_summary_container"
+    <TextView
+        android:id="@+id/total_amount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Total: 0 PHP"
+        android:textSize="18sp"
+        android:textColor="@color/red"
+        android:layout_marginTop="8dp" />
+
+    <Button
+        android:id="@+id/confirm_order_button"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical" />
-</ScrollView>
-
-
-<TextView
-android:id="@+id/total_amount"
-android:layout_width="wrap_content"
-android:layout_height="wrap_content"
-android:text="Total: 0 PHP"
-android:textSize="18sp"
-android:textColor="@color/red"
-android:layout_marginTop="8dp" />
-
-
-<Button
-android:id="@+id/confirm_order_button"
-android:layout_width="match_parent"
-android:layout_height="wrap_content"
-android:text="Confirm Order"
-android:background="@drawable/rounded_confirm_btn"
-android:textColor="@color/golden_yellow"
-android:layout_marginTop="16dp" />
-    </LinearLayout>
-
-
+        android:text="Confirm Order"
+        android:background="@drawable/rounded_confirm_btn"
+        android:textColor="@color/golden_yellow"
+        android:layout_marginTop="16dp" />
+</LinearLayout>
