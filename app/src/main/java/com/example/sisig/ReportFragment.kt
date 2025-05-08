@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.*
 
-class ReportActivity : Fragment() {
+class ReportFragment : Fragment() {
     private lateinit var db: AppDatabase
     private lateinit var dailySalesTextView: TextView
     private lateinit var monthlySalesTextView: TextView
@@ -37,8 +37,8 @@ class ReportActivity : Fragment() {
     private val KEY_LAST_MILESTONE = "lastMilestone"
 
     companion object {
-        fun newInstance(): ReportActivity {
-            return ReportActivity()
+        fun newInstance(): ReportFragment {
+            return ReportFragment()
         }
     }
 

@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Date
 
-class HomeActivity : Fragment() {
+class HomeFragment : Fragment() {
     private lateinit var recyclerView: RecyclerView
     private lateinit var menuAdapter: MenuAdapter
     private lateinit var orderSummarySection: View
@@ -30,8 +30,8 @@ class HomeActivity : Fragment() {
     private val selectedItems = mutableListOf<Pair<MenuItem, Int>>()
 
     companion object {
-        fun newInstance(): HomeActivity {
-            return HomeActivity()
+        fun newInstance(): HomeFragment {
+            return HomeFragment()
         }
     }
 

@@ -15,7 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class NotificationsActivity : Fragment() {
+class NotificationsFragment : Fragment() {
 
     private lateinit var noNotificationLayout: View
     private lateinit var notificationsList: RecyclerView
@@ -23,8 +23,8 @@ class NotificationsActivity : Fragment() {
     private lateinit var db: AppDatabase
 
     companion object {
-        fun newInstance(): NotificationsActivity {
-            return NotificationsActivity()
+        fun newInstance(): NotificationsFragment {
+            return NotificationsFragment()
         }
     }
 

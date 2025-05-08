@@ -25,7 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class InventoryActivity : Fragment() {
+class InventoryFragment : Fragment() {
     private lateinit var db: AppDatabase
     private var lastProcessedOrderId: Long = 0
     private val lowStockThreshold = 10
@@ -34,8 +34,8 @@ class InventoryActivity : Fragment() {
     private var lastNotifiedStock: Int? = null
 
     companion object {
-        fun newInstance(): InventoryActivity {
-            return InventoryActivity()
+        fun newInstance(): InventoryFragment {
+            return InventoryFragment()
         }
     }
 

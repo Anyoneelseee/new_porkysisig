@@ -3,13 +3,10 @@ package com.example.sisig
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
-import android.util.Log
+import android.util.Patterns
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -18,26 +15,30 @@ import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.example.sisig.data.AppDatabase
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
+import android.util.Log
 
 class SettingsFragment : Fragment() {
 
-    private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var auth: FirebaseAuth
+    private lateinit var db: FirebaseFirestore
+    private lateinit var storage: FirebaseStorage
+    private lateinit var roomDb: AppDatabase
     private lateinit var avatarImage: ImageView
     private lateinit var emailInput: EditText
     private lateinit var usernameInput: EditText
-    private lateinit var preferredNameInput: EditText
-    private lateinit var saveChangesButton: Button
     private lateinit var changeAvatar: TextView
-    private lateinit var db: AppDatabase
-
+    private lateinit var deleteDataButton: Button
+    private lateinit var manageUsersButton: Button
     private val PICK_IMAGE_REQUEST = 1000
-    private val avatarFileName = "avatar_image.jpg"
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -45,79 +46,52 @@ class SettingsFragment : Fragment() {
     ): View? {
         val view = inflater.inflate(R.layout.fragment_settings, container, false)
 
-        // Initialize SharedPreferences
-        sharedPreferences = requireContext().getSharedPreferences("UserPreferences", Context.MODE_PRIVATE)
-
-        // Initialize Database
-        db = AppDatabase.getInstance(requireContext())
+        // Initialize Firebase and Room
+        auth = FirebaseAuth.getInstance()
+        db = FirebaseFirestore.getInstance()
+        storage = FirebaseStorage.getInstance()
+        roomDb = AppDatabase.getInstance(requireContext())
 
         // Initialize UI elements
         avatarImage = view.findViewById(R.id.avatarImage)
         emailInput = view.findViewById(R.id.emailInput)
         usernameInput = view.findViewById(R.id.usernameInput)
-        preferredNameInput = view.findViewById(R.id.preferredNameInput)
-        saveChangesButton = view.findViewById(R.id.saveChangesButton)
         changeAvatar = view.findViewById(R.id.changeAvatar)
+        deleteDataButton = view.findViewById(R.id.deleteDataButton)
+        manageUsersButton = view.findViewById(R.id.manageUsersButton)
 
-        // Initialize Delete Data Button
-        val deleteDataButton = view.findViewById<Button>(R.id.deleteDataButton)
-        deleteDataButton.setOnClickListener {
-            confirmAndDeleteData()
+        // Check user role and restrict access
+        val userRole = requireContext().getSharedPreferences("SessionPrefs", Context.MODE_PRIVATE)
+            .getString("userRole", "")
+        if (userRole != "Owner") {
+            manageUsersButton.visibility = View.GONE
+            deleteDataButton.visibility = View.GONE
+            Toast.makeText(context, "Restricted to Owner", Toast.LENGTH_SHORT).show()
+            return view
         }
 
-        // Load saved data into input fields and avatar
+        // Load user details
         loadUserDetails()
 
-        // Handle Change Avatar click
-        changeAvatar.setOnClickListener {
-            openImagePicker()
-        }
-
-        // Save Changes button click listener
-        saveChangesButton.setOnClickListener {
-            saveUserDetails()
-        }
+        // Handle button clicks
+        changeAvatar.setOnClickListener { openImagePicker() }
+        deleteDataButton.setOnClickListener { confirmAndDeleteData() }
+        manageUsersButton.setOnClickListener { showManageUsersDialog() }
 
         return view
     }
 
-    private fun saveUserDetails() {
-        val email = emailInput.text.toString().trim()
-        val username = usernameInput.text.toString().trim()
-        val preferredName = preferredNameInput.text.toString().trim()
-
-        // Validate input
-        if (email.isNotEmpty() && username.isNotEmpty() && preferredName.isNotEmpty()) {
-            with(sharedPreferences.edit()) {
-                putString("email", email)
-                putString("username", username)
-                putString("preferredName", preferredName)
-                apply()
-            }
-            Toast.makeText(requireContext(), "Changes saved", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(requireContext(), "Please fill in all fields", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     private fun loadUserDetails() {
-        val email = sharedPreferences.getString("email", "")
-        val username = sharedPreferences.getString("username", "")
-        val preferredName = sharedPreferences.getString("preferredName", "")
-
-        emailInput.setText(email)
-        usernameInput.setText(username)
-        preferredNameInput.setText(preferredName)
-
-        // Load avatar from internal storage
-        loadAvatarImage()
-    }
-
-    private fun loadAvatarImage() {
-        val avatarFile = File(requireContext().filesDir, avatarFileName)
-        if (avatarFile.exists()) {
-            val bitmap = BitmapFactory.decodeFile(avatarFile.absolutePath)
-            avatarImage.setImageBitmap(bitmap)
+        val user = auth.currentUser ?: return
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val doc = db.collection("users").document(user.uid).get().await()
+                emailInput.setText(doc.getString("email"))
+                usernameInput.setText(doc.getString("username"))
+                Log.d("SettingsFragment", "User role: ${doc.getString("role")}")
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error loading user data: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -131,36 +105,32 @@ class SettingsFragment : Fragment() {
         if (resultCode == Activity.RESULT_OK && requestCode == PICK_IMAGE_REQUEST) {
             val selectedImageUri = data?.data
             if (selectedImageUri != null) {
-                saveImageToInternalStorage(selectedImageUri)
+                saveImageToStorage(selectedImageUri)
             } else {
-                Toast.makeText(requireContext(), "Failed to select image", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Failed to select image", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
-    private fun saveImageToInternalStorage(imageUri: Uri) {
-        try {
-            val inputStream = requireContext().contentResolver.openInputStream(imageUri)
-            val bitmap = BitmapFactory.decodeStream(inputStream)
-            inputStream?.close()
-
-            val avatarFile = File(requireContext().filesDir, avatarFileName)
-            val outputStream = FileOutputStream(avatarFile)
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
-            outputStream.close()
-
-            avatarImage.setImageBitmap(bitmap)
-            Toast.makeText(requireContext(), "Avatar updated", Toast.LENGTH_SHORT).show()
-        } catch (e: IOException) {
-            Log.e("SettingsFragment", "Failed to save avatar: ${e.message}", e)
-            Toast.makeText(requireContext(), "Failed to save avatar", Toast.LENGTH_SHORT).show()
+    private fun saveImageToStorage(imageUri: Uri) {
+        val user = auth.currentUser ?: return
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val ref = storage.getReference("avatars/${user.uid}.jpg")
+                ref.putFile(imageUri).await()
+                val url = ref.downloadUrl.await().toString()
+                db.collection("users").document(user.uid).update("avatarUrl", url).await()
+                Toast.makeText(context, "Avatar updated", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Failed to save avatar: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
     private fun confirmAndDeleteData() {
         AlertDialog.Builder(requireContext())
             .setTitle("Delete All Data")
-            .setMessage("Are you sure you want to delete all saved user data and app data? This action cannot be undone.")
+            .setMessage("Are you sure you want to delete all app data? This action cannot be undone.")
             .setPositiveButton("Yes") { _, _ -> deleteAllData() }
             .setNegativeButton("Cancel", null)
             .show()
@@ -168,42 +138,169 @@ class SettingsFragment : Fragment() {
 
     private fun deleteAllData() {
         viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+            var deletionSuccessful = true
             try {
-                // Clear SharedPreferences
-                requireContext().getSharedPreferences("UserPreferences", Context.MODE_PRIVATE).edit().clear().apply()
-                requireContext().getSharedPreferences("ReportPrefs", Context.MODE_PRIVATE).edit().clear().apply()
-                requireContext().getSharedPreferences("InventoryPrefs", Context.MODE_PRIVATE).edit().clear().apply()
+                // Delete Room database tables
+                roomDb.allOrderDao.deleteAll()
+                roomDb.notificationDao.clearAll()
+                roomDb.productStockDao.deleteAll()
+                roomDb.stockDao.deleteAll()
+                roomDb.productDao.deleteAll()
+                roomDb.orderItemDao.deleteAll()
+                roomDb.orderDao.deleteAll()
+                Log.d("SettingsFragment", "Room database tables cleared")
 
-                // Delete avatar file from internal storage
-                val avatarFile = File(requireContext().filesDir, avatarFileName)
-                if (avatarFile.exists()) {
-                    avatarFile.delete()
+                // Delete Firestore users collection
+                try {
+                    deleteCollection(db.collection("users"))
+                    Log.d("SettingsFragment", "Firestore users collection deleted")
+                } catch (e: Exception) {
+                    deletionSuccessful = false
+                    Log.e("SettingsFragment", "Failed to delete Firestore users: ${e.message}")
                 }
 
-                // Clear Room database
-                db.orderDao.deleteAll()
-                db.orderItemDao.deleteAll()
-                db.productDao.deleteAll()
-                db.stockDao.deleteAll()
-                db.allOrderDao.deleteAll()
-                db.productStockDao.deleteAll()
-                db.notificationDao.clearAll()
+                // Delete avatar from storage
+                val uid = auth.currentUser?.uid
+                if (uid != null) {
+                    try {
+                        storage.getReference("avatars/$uid.jpg").delete().await()
+                        Log.d("SettingsFragment", "Avatar deleted for UID: $uid")
+                    } catch (e: Exception) {
+                        Log.d("SettingsFragment", "No avatar to delete: ${e.message}")
+                    }
+                }
 
-                withContext(Dispatchers.Main) {
-                    // Clear UI fields
+                // Delete current Firebase Auth user
+                try {
+                    auth.currentUser?.delete()?.await()
+                    Log.d("SettingsFragment", "Firebase Auth user deleted")
+                } catch (e: Exception) {
+                    deletionSuccessful = false
+                    Log.e("SettingsFragment", "Failed to delete Firebase Auth user: ${e.message}")
+                }
+
+            } catch (e: Exception) {
+                deletionSuccessful = false
+                Log.e("SettingsFragment", "Unexpected deletion error: ${e.message}", e)
+            }
+
+            // Always attempt redirection
+            withContext(Dispatchers.Main) {
+                try {
+                    // Clear SharedPreferences
+                    requireContext().getSharedPreferences("SessionPrefs", Context.MODE_PRIVATE).edit().clear().apply()
+                    requireContext().getSharedPreferences("ReportPrefs", Context.MODE_PRIVATE).edit().clear().apply()
+                    requireContext().getSharedPreferences("InventoryPrefs", Context.MODE_PRIVATE).edit().clear().apply()
+
+                    // Clear UI
                     emailInput.text.clear()
                     usernameInput.text.clear()
-                    preferredNameInput.text.clear()
                     avatarImage.setImageResource(R.drawable.circle_background)
-                    Toast.makeText(requireContext(), "All data deleted successfully", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                Log.e("SettingsFragment", "Error deleting data: ${e.message}", e)
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(requireContext(), "Error deleting data: ${e.message}", Toast.LENGTH_LONG).show()
+
+                    // Show success Toast
+                    Toast.makeText(
+                        context,
+                        if (deletionSuccessful) "All data deleted successfully" else "Some data could not be deleted",
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                    // Sign out and redirect to MainActivity
+                    auth.signOut()
+                    val intent = Intent(requireContext(), MainActivity::class.java)
+                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    Log.d("SettingsFragment", "Attempting to start MainActivity")
+                    try {
+                        requireActivity().startActivity(intent)
+                    } catch (e: Exception) {
+                        Log.e("SettingsFragment", "Primary startActivity failed: ${e.message}")
+                        context?.startActivity(intent)
+                    }
+                    delay(100)
+                    requireActivity().finish()
+                    Log.d("SettingsFragment", "Current activity finished")
+                } catch (e: Exception) {
+                    Log.e("SettingsFragment", "Redirection error: ${e.message}", e)
+                    Toast.makeText(context, "Error redirecting to login: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }
+    }
+
+    private suspend fun deleteCollection(collection: com.google.firebase.firestore.CollectionReference) {
+        val batchSize = 100
+        val querySnapshot = collection.limit(batchSize.toLong()).get().await()
+        if (querySnapshot.isEmpty) {
+            Log.d("SettingsFragment", "Collection ${collection.path} is empty")
+            return
+        }
+
+        val batch = collection.firestore.batch()
+        for (document in querySnapshot.documents) {
+            batch.delete(document.reference)
+            Log.d("SettingsFragment", "Deleting document: ${document.reference.path}")
+        }
+        batch.commit().await()
+        Log.d("SettingsFragment", "Batch committed for ${collection.path}")
+
+        deleteCollection(collection)
+    }
+
+    private fun showManageUsersDialog() {
+        val dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_manage_users, null)
+        val emailInput = dialogView.findViewById<EditText>(R.id.staffEmailInput)
+        val usernameInput = dialogView.findViewById<EditText>(R.id.staffUsernameInput)
+        val passwordInput = dialogView.findViewById<EditText>(R.id.staffPasswordInput)
+        val addButton = dialogView.findViewById<Button>(R.id.addStaffButton)
+
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle("Add Staff Account")
+            .setView(dialogView)
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        addButton.setOnClickListener {
+            val email = emailInput.text.toString().trim()
+            val username = usernameInput.text.toString().trim()
+            val password = passwordInput.text.toString().trim()
+
+            if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                Toast.makeText(context, "Invalid email format", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            if (username.isEmpty() || password.length < 6) {
+                Toast.makeText(context, "Please fill in all fields (password min 6 chars)", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    val userCredential = auth.createUserWithEmailAndPassword(email, password).await()
+                    val uid = userCredential.user?.uid ?: return@launch
+                    db.collection("users").document(uid).set(
+                        mapOf(
+                            "email" to email,
+                            "username" to username,
+                            "role" to "Staff",
+                            "avatarUrl" to null
+                        )
+                    ).await()
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Staff account created", Toast.LENGTH_SHORT).show()
+                        dialog.dismiss()
+                    }
+                } catch (e: FirebaseAuthUserCollisionException) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Email already in use", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Error creating account: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        dialog.show()
     }
 
     companion object {

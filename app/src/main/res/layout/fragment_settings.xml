@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -45,11 +46,8 @@
             android:layout_width="match_parent"
             android:layout_height="50dp"
             android:background="@drawable/edittext_border"
-            android:inputType="textMultiLine"
-            android:maxLines="5"
-            android:minLines="1"
+            android:inputType="textEmailAddress"
             android:paddingStart="16dp"
-            android:scrollbars="vertical"
             tools:ignore="RtlSymmetry,TextFields" />
 
         <!-- Username Label and Input -->
@@ -65,52 +63,24 @@
             android:id="@+id/usernameInput"
             android:layout_width="match_parent"
             android:layout_height="50dp"
-            android:autofillHints=""
             android:background="@drawable/edittext_border"
-            android:inputType="textMultiLine"
-            android:maxLines="5"
-            android:minLines="1"
+            android:inputType="text"
             android:paddingStart="16dp"
-            android:scrollbars="vertical"
             tools:ignore="RtlSymmetry" />
 
-        <!-- Preferred Name Label and Input -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Preferred Name"
-            android:textColor="@android:color/black"
-            android:textSize="14sp" />
-
-        <EditText
-            android:id="@+id/preferredNameInput"
-            android:layout_width="match_parent"
-            android:layout_height="50dp"
-            android:background="@drawable/edittext_border"
-            android:inputType="textMultiLine"
-            android:maxLines="5"
-            android:minLines="1"
-            android:paddingStart="16dp"
-            android:scrollbars="vertical"
-            tools:ignore="RtlSymmetry" />
-
-        <!-- Warning Message Container -->
-
-
-        <!-- Save Changes Button -->
+        <!-- Add Staff Button -->
         <Button
-            android:id="@+id/saveChangesButton"
+            android:id="@+id/manageUsersButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="start"
             android:layout_marginTop="24dp"
             android:background="@drawable/rounded_confirm_btn"
             android:fontFamily="sans-serif-black"
-            android:text="SAVE"
+            android:text="Manage Staff Accounts"
             android:textColor="#FFFB83" />
 
-
+        <!-- Warning Message Container -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -143,9 +113,4 @@
             android:text="Delete Data"
             android:textColor="#FFFB83" />
     </LinearLayout>
-    </ScrollView>
-
-
-
-
-
+</ScrollView>

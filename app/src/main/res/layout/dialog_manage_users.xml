@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <EditText
+        android:id="@+id/staffEmailInput"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:hint="Staff Email"
+        android:inputType="textEmailAddress"
+        android:background="@drawable/edittext_border"
+        android:paddingStart="16dp"
+        android:layout_marginBottom="8dp"/>
+
+    <EditText
+        android:id="@+id/staffUsernameInput"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:hint="Staff Username"
+        android:inputType="text"
+        android:background="@drawable/edittext_border"
+        android:paddingStart="16dp"
+        android:layout_marginBottom="8dp"/>
+
+    <EditText
+        android:id="@+id/staffPasswordInput"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:hint="Staff Password"
+        android:inputType="textPassword"
+        android:background="@drawable/edittext_border"
+        android:paddingStart="16dp"
+        android:layout_marginBottom="16dp"/>
+
+    <Button
+        android:id="@+id/addStaffButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Add Staff"
+        android:background="@drawable/rounded_confirm_btn"
+        android:textColor="#FFFB83"
+        android:fontFamily="sans-serif-black"/>
+</LinearLayout>
